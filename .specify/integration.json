@@ -1,0 +1,15 @@
+{
+  "version": "1.2.6.dev0",
+  "integration_state_schema": 1,
+  "installed_integrations": [
+    "docker-agent"
+  ],
+  "integration_settings": {
+    "docker-agent": {
+      "script": "ps",
+      "invoke_separator": "-"
+    }
+  },
+  "integration": "docker-agent",
+  "default_integration": "docker-agent"
+}
