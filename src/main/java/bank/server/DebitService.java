@@ -6,6 +6,7 @@ import bank.common.InsufficientFundsException;
 import bank.common.InvalidRequestException;
 import bank.common.Outcome;
 import bank.common.Sqlite;
+import bank.common.StorageException;
 import bank.common.StaleKeyException;
 import bank.server.AccountStore.Account;
 import java.util.Objects;
@@ -73,8 +74,19 @@ public final class DebitService {
             if (request.amount() > account.balance()) {
                 throw new InsufficientFundsException(account.balance(), request.amount());
             }
-            // Rule 5: execute. Implemented in task T007.
-            throw new UnsupportedOperationException("debit execution is implemented in task T007");
+            // Rule 5: execute. One guarded UPDATE changes the balance and the key together, in
+            // this same transaction (FR-010). Returning commits it, and any exception rolls it
+            // back, so the two values can never be stored apart.
+            int changed = accounts.applyDebit(
+                    connection, request.accountId(), request.amount(), request.key());
+            if (changed != 1) {
+                throw new StorageException(
+                        "the guarded update changed " + changed + " rows instead of 1", null);
+            }
+            Account updated = accounts.find(connection, request.accountId())
+                    .orElseThrow(() -> new StorageException(
+                            "the account disappeared during the debit", null));
+            return new Result(Outcome.SUCCESS, updated.balance());
         });
     }
 }
