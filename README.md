@@ -34,7 +34,7 @@ Documents were changed **before** the code whenever implementation work exposed 
 Prerequisites: JDK 21 or newer, Maven 3.9 or newer, Git. No SQLite installation is needed (the driver bundles it).
 
 ```powershell
-git clone https://github.com/<your-username>/distributed-banking-spec-driven.git
+git clone https://github.com/mhd-ghaith/distributed-banking-spec-driven.git
 cd distributed-banking-spec-driven
 mvn test
 ```
