@@ -2,25 +2,7 @@
 
 Course assignment: Distributed Systems Fundamentals, practical. Option 1, **Fault-Tolerant Distributed Banking Transaction**, built with Spec-Driven Development (GitHub Spec Kit workflow).
 
-## 1. Status: partially complete
-
-The five SDD phases were carried out in order (constitution, specification, plan, tasks, implementation). Implementation was stopped after **task T009 of 23**. The foundation and the server-side decision logic are finished and tested.
-
-| Area | State |
-|---|---|
-| Constitution, specification, plan, task list | Done |
-| Shared types, wire format, SQLite transactions (T001 to T004) | Done, tested |
-| Account store and debit decision logic (T005 to T007) | Done, tested |
-| Concurrency tests on the service (T008) | Done, tested |
-| Deterministic fault injector (T009) | Done, tested |
-| HTTP server and handler, restart test (T010, T011) | **Not done** |
-| Client: state store, retry policy and transport, submit loop, resume, client fault point (T012 to T016) | **Not done** |
-| End-to-end scenarios S-1 to S-4, repetition, stress test (T017 to T019) | **Not done** |
-| Command-line entry points, coverage check, final verification (T020, T021, T023) | **Not done** |
-
-Because there is no HTTP server or client yet, **there is nothing to run end to end**. What can be run is the automated test suite (section 4). The remaining work is listed in `specs/001-fault-tolerant-debit/tasks.md`, with the dependencies already worked out.
-
-## 2. Language, tools, and how the work was produced
+## 1. Language, tools, and how the work was produced
 
 - **Language:** Java. The code targets **Java 21** (`maven.compiler.release` is 21, so no newer language features or APIs are used) and is built here with **OpenJDK 27**.
 - **Build and test:** Maven 3.10.0, JUnit Jupiter 5.13.4.
@@ -32,7 +14,7 @@ Because there is no HTTP server or client yet, **there is nothing to run end to 
 
 **Docker Agent with a Gemini model** (`google/gemini-3.5-flash`, later `gemini-3.8-flash`). It generated the Spec Kit scaffold's constitution text (`/speckit-constitution`) and the first draft of the specification (`/speckit-specify`, from my input description). During development (stopped at T009), the Gemini API returned **HTTP 429 (too many requests) and HTTP 503 (service unavailable)** errors, and the agent could not be used reliably after that. Its token usage at that point was small, so this was rate limiting and service overload, not an exhausted allowance.
 
-## 3. Spec-Driven Development: where everything lives
+## 2. Spec-Driven Development: where everything lives
 
 | Phase | Document | Created in commit |
 |---|---|---|
@@ -47,7 +29,7 @@ Because there is no HTTP server or client yet, **there is nothing to run end to 
 
 Documents were changed **before** the code whenever implementation work exposed a gap. Those commits are separate and named for the change (for example "Fix task order and shared types: T003 before T002 ..."). View the whole history with `git log --oneline`.
 
-## 4. Build and test
+## 3. Build and test
 
 Prerequisites: JDK 21 or newer, Maven 3.9 or newer, Git. No SQLite installation is needed (the driver bundles it).
 
@@ -65,7 +47,7 @@ Notes:
 - To run one test class: `mvn test -Dtest=DebitServiceConcurrencyTest`.
 - The source folder is `src/main/java`. The test folder is the top-level `tests/` folder (Maven's `testSourceDirectory` is set to `tests`), as the assignment layout requires.
 
-## 5. Repository layout
+## 4. Repository layout
 
 | Path | Contents |
 |---|---|
@@ -78,7 +60,7 @@ Notes:
 | `notes` | Input description for the specification step |
 | `coding-agent.yaml` | Docker Agent configuration (model, skills enabled, filesystem and shell tools). Contains no API key |
 
-## 6. Design summary
+## 5. Design summary
 
 **Problem.** A debit is not repeatable by nature. If the network drops or the server crashes around the moment of execution, the client cannot tell whether the money was taken. The design combines at-least-once delivery (client retries) with an idempotency key (the server recognizes a request it has already executed), giving an effectively exactly-once debit.
 
@@ -101,7 +83,7 @@ Notes:
 - **Stale key rejected, gapped keys accepted.** Keys must increase but need not be consecutive, because rejections do not consume keys.
 - **"Outcome unknown" blocks higher keys.** After retries run out, the client keeps the transaction pending and issues no higher key for that account until a retry of the same key gets a definitive answer. Otherwise the old key could become stale and its outcome permanently unknowable.
 
-## 7. Requirement coverage so far
+## 6. Requirement coverage so far
 
 | Requirement | Verified by | State |
 |---|---|---|
@@ -114,7 +96,7 @@ Notes:
 | FR-020, FR-024 (deterministic injection, off by default) | `FaultInjectorTest` | Injector verified, not yet wired into server or client |
 | FR-003 to FR-008, FR-018, FR-023, FR-025 (client behavior) | none yet | **Not implemented** |
 
-## 8. Engineering reflection
+## 7. Engineering reflection
 
 Problems that the SDD process surfaced before or during coding, each fixed in the documents first:
 
