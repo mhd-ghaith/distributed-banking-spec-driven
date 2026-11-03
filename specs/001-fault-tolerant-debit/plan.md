@@ -60,7 +60,7 @@ Packages live under `src/main/java/bank/`. Tests mirror them under `tests/bank/`
 | Package | Class | Responsibility |
 |---|---|---|
 | `bank.common` | `Outcome` | Enum: SUCCESS, DUPLICATE_ACKNOWLEDGED, INSUFFICIENT_FUNDS, INVALID_REQUEST, STALE_KEY, ERROR. Method `isDefinitive()` is false only for ERROR |
-| | `DebitRequest` | Immutable record: account id, amount, key, retry indicator |
+| | `DebitRequest` | Immutable record: account id, amount, key, retry indicator. Method `requireValid()` is the single place that checks the account identifier characters, a positive amount, and a positive key |
 | | `DebitResponse` | Immutable record: outcome, account id, key, balance (optional), reason (optional) |
 | | `WireFormat` | Encodes and decodes requests and responses. Decoding failures raise `InvalidRequestException` (server side) or are treated as ERROR (client side) |
 | | `Sqlite` | Opens connections with the project's settings (WAL journal, full synchronous, busy timeout, immediate transactions). Holds only the database URL |
@@ -125,7 +125,7 @@ No other server table is needed. The spec assumes the server's only durable memo
 
 | Type | Thrown by | Meaning | Maps to |
 |---|---|---|---|
-| `BankException` | (base, sealed) | Common parent | |
+| `BankException` | (base, sealed, checked) | Common parent. All subclasses are in `bank.common`, because a sealed class in a project without a module descriptor requires its subclasses in the same package | |
 | `InvalidRequestException` | `WireFormat`, `DebitService` | Malformed request, unknown account, non-positive amount or key | INVALID_REQUEST |
 | `InsufficientFundsException` | `DebitService` | Amount exceeds balance for a new key. Carries the balance | INSUFFICIENT_FUNDS |
 | `StaleKeyException` | `DebitService` | Key lower than last executed. Carries the balance | STALE_KEY |

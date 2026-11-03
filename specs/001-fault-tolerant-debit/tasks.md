@@ -23,7 +23,7 @@
 - **Done when**: `mvn -v` shows the JDK in use, and `mvn test` finishes with BUILD SUCCESS. IntelliJ imports the project with language level 21. If the build fails because of JDK 27, apply the plan's risk mitigation and record what happened.
 
 ### T002: SQLite connection support
-- **Depends on**: T001
+- **Depends on**: T001, T003 (T003 creates `StorageException`, so it is done first)
 - **Files**: `src/main/java/bank/common/Sqlite.java`, `tests/bank/common/SqliteTest.java`
 - **Work**: A class that opens connections to a database file with WAL journal mode, full synchronous mode, a busy timeout, and immediate transaction mode, and throws `StorageException` on failure. It holds only the database URL.
 - **Requirements**: FR-019 (durability settings), FR-015 (immediate transactions)
@@ -33,15 +33,15 @@
 
 ### T003: Outcomes, messages, and error types
 - **Depends on**: T001
-- **Files**: `bank/common/Outcome.java`, `DebitRequest.java`, `DebitResponse.java`, `BankException.java`, `InvalidRequestException.java`, `InsufficientFundsException.java`, `StaleKeyException.java`, `StorageException.java`, `NetworkFailureException.java`, `AttemptTimeoutException.java`, plus `tests/bank/common/OutcomeTest.java`
-- **Work**: Create the types from plan section 5 and 7. `DebitRequest` and `DebitResponse` are immutable records using `long` for amounts, keys, and balances.
-- **Requirements**: FR-001, FR-022
-- **Done when**: Tests confirm that `isDefinitive()` is true for SUCCESS, DUPLICATE_ACKNOWLEDGED, INSUFFICIENT_FUNDS, INVALID_REQUEST, and STALE_KEY, and false for ERROR only.
+- **Files**: `bank/common/Outcome.java`, `DebitRequest.java`, `DebitResponse.java`, `BankException.java`, `InvalidRequestException.java`, `InsufficientFundsException.java`, `StaleKeyException.java`, `StorageException.java`, `NetworkFailureException.java`, `AttemptTimeoutException.java`, `PendingTransactionException.java`, plus `tests/bank/common/OutcomeTest.java`, `DebitRequestTest.java`, `DebitResponseTest.java`, `BankExceptionTest.java`
+- **Work**: Create the types from plan sections 5 and 7. `DebitRequest` and `DebitResponse` are immutable records using `long` for amounts, keys, and balances. `DebitRequest.requireValid()` is the single place that checks the account identifier (1 to 64 letters, digits, `_` or `-`), the amount (greater than zero), and the key (greater than zero). `BankException` is a sealed checked exception, and all its subclasses live in `bank.common` because the project has no module descriptor.
+- **Requirements**: FR-001, FR-009, FR-017, FR-022
+- **Done when**: Tests confirm the six outcome names, that `isDefinitive()` is true for SUCCESS, DUPLICATE_ACKNOWLEDGED, INSUFFICIENT_FUNDS, INVALID_REQUEST, and STALE_KEY and false for ERROR only, that `requireValid()` accepts a well-formed request and rejects each bad account identifier, amount, and key, that responses carry an optional balance, and that every error type is a distinct class carrying its data.
 
 ### T004: Wire format
 - **Depends on**: T003
 - **Files**: `bank/common/WireFormat.java`, `tests/bank/common/WireFormatTest.java`
-- **Work**: Encode and decode requests and responses as lines of `name=value` (plan decision D-4). Decoding a request validates every field.
+- **Work**: Encode and decode requests and responses as lines of `name=value` (plan decision D-4). Decoding a request parses every field and then calls `DebitRequest.requireValid()`.
 - **Requirements**: FR-001, FR-009, FR-017
 - **Done when**: Tests cover round trips for requests and responses, and `InvalidRequestException` for: a missing field, a repeated field, a non-numeric number, an amount of zero or less, a key of zero or less, an account id with characters outside letters, digits, `_` and `-`, and an empty body.
 
@@ -57,7 +57,7 @@
 ### T006: Debit decisions that never change state
 - **Depends on**: T005
 - **Files**: `bank/server/DebitService.java` (first part), `tests/bank/server/DebitServiceTest.java`
-- **Work**: The service opens an immediate transaction, reads the account, and applies rules in the order from FR-021: unknown account gives `InvalidRequestException`, equal key gives DUPLICATE_ACKNOWLEDGED with the current balance (ignoring the request's amount and retry indicator), lower key gives `StaleKeyException`, amount over balance gives `InsufficientFundsException`. All of these roll back.
+- **Work**: The service first calls `requireValid()` on the request, then opens an immediate transaction, reads the account, and applies rules in the order from FR-021: unknown account gives `InvalidRequestException`, equal key gives DUPLICATE_ACKNOWLEDGED with the current balance (ignoring the request's amount and retry indicator), lower key gives `StaleKeyException`, amount over balance gives `InsufficientFundsException`. All of these roll back.
 - **Requirements**: FR-012, FR-013, FR-014, FR-017, FR-021
 - **Done when**: Tests cover each rule and assert that balance and last key are unchanged afterward. One test covers the **retry of an executed debit after the balance dropped** (balance 1000, debit 800 key 1 executed, retry of 800 key 1 gets DUPLICATE_ACKNOWLEDGED). Another test shows the retry indicator has no effect on the outcome.
 
@@ -118,7 +118,7 @@
 
 ### T014: Client submit loop
 - **Depends on**: T012, T013
-- **Files**: `bank/client/OrderServiceClient.java`, `TransactionResult.java`, `PendingTransactionException.java`, `tests/bank/client/OrderServiceClientTest.java`
+- **Files**: `bank/client/OrderServiceClient.java`, `TransactionResult.java`, `tests/bank/client/OrderServiceClientTest.java`
 - **Work**: Implement `submit` as in plan section 10.2, using a scripted fake transport in tests so every sequence of responses is exact. The first attempt has the retry indicator false and later ones true. A response whose account or key does not match is ignored as if nothing arrived.
 - **Requirements**: FR-005, FR-006, FR-007, FR-008, FR-009, FR-018, FR-022, FR-023
 - **Done when**: Tests show: success on the first attempt, ERROR then success using the same key, a timeout then DUPLICATE_ACKNOWLEDGED reported as COMPLETED, INSUFFICIENT_FUNDS and INVALID_REQUEST and STALE_KEY reported as REJECTED with the reason, exhausted attempts reported as OUTCOME_UNKNOWN with the key and never as failed, a new `submit` for that account refused with `PendingTransactionException` and no new key issued, the retry indicator sequence false then true, and a mismatched response ignored.
@@ -222,4 +222,4 @@
 
 ## Order of Execution
 
-T001, T002, T003, T004, T005, T006, T007, T008, T009, T010, T011, T012, T013, T014, T015, T016, T017, T018, T019, T020, T021, T022, T023.
+T001, T003, T002, T004, T005, T006, T007, T008, T009, T010, T011, T012, T013, T014, T015, T016, T017, T018, T019, T020, T021, T022, T023.
