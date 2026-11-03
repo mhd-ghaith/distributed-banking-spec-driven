@@ -180,7 +180,7 @@ A further test-only combination, `SERVER_BEFORE_EXECUTION` with DELAY, makes the
 
 ### 9.3 Configuration and determinism
 
-A `FaultConfig` holds a seed and a list of rules. A rule names a point, an action, an optional account, an optional key, and either "apply to the first N occurrences" or "apply with probability p". For a probability rule, the decision is computed by seeding a fresh `SplittableRandom` from a hash of the seed, the point, the account, the key, and the occurrence number. The same inputs always give the same decision, whatever the thread timing (D-7, FR-020).
+A `FaultConfig` holds a seed and a list of rules. A rule names a point, an action, an optional account, an optional key, and either "apply to the first N occurrences" or "apply with probability p". For a probability rule, the decision is computed by seeding a fresh `SplittableRandom` from a hash of the seed, the point, the account, the key, and the occurrence number. The same inputs always give the same decision, whatever the thread timing (D-7, FR-020). An occurrence is one consultation of the injector for the same fault point, account, and key, counted from 1. Rules are checked in order and the first rule that matches and fires decides. The injector only decides; the caller performs the drop or the delay.
 
 A disabled injector is the default. When it is in use, no rule is evaluated, no counter is touched, and behavior is identical to a build without fault injection (FR-024).
 

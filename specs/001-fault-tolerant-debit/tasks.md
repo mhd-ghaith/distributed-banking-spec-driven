@@ -56,17 +56,17 @@
 
 ### T006: Debit decisions that never change state
 - **Depends on**: T005
-- **Files**: `bank/server/DebitService.java` (first part), `tests/bank/server/DebitServiceTest.java`
-- **Work**: The service first calls `requireValid()` on the request, then opens an immediate transaction, reads the account, and applies rules in the order from FR-021: unknown account gives `InvalidRequestException`, equal key gives DUPLICATE_ACKNOWLEDGED with the current balance (ignoring the request's amount and retry indicator), lower key gives `StaleKeyException`, amount over balance gives `InsufficientFundsException`. All of these roll back.
+- **Files**: `src/main/java/bank/server/DebitService.java` (first part), `tests/bank/server/DebitServiceTest.java`
+- **Work**: `DebitService` is created from a `Sqlite` object and an `AccountStore`. Its method `execute(DebitRequest)` returns a `Result` (outcome and balance) or throws a `BankException`. It first calls `requireValid()` on the request, then opens an immediate transaction, reads the account, and applies the rules in the order from FR-021: unknown account gives `InvalidRequestException`; equal key gives DUPLICATE_ACKNOWLEDGED with the current balance (ignoring the request's amount and retry indicator); lower key gives `StaleKeyException`; amount over balance gives `InsufficientFundsException`. None of these changes any data. The final rule (executing the debit) is left unfinished in this task and fails with `UnsupportedOperationException` until T007.
 - **Requirements**: FR-012, FR-013, FR-014, FR-017, FR-021
-- **Done when**: Tests cover each rule and assert that balance and last key are unchanged afterward. One test covers the **retry of an executed debit after the balance dropped** (balance 1000, debit 800 key 1 executed, retry of 800 key 1 gets DUPLICATE_ACKNOWLEDGED). Another test shows the retry indicator has no effect on the outcome.
+- **Done when**: Tests cover each rule and assert that balance and last key are unchanged afterward. One test covers the **retry of an executed debit after the balance dropped** (balance 1000, debit 800 key 1 executed, retry of 800 key 1 gets DUPLICATE_ACKNOWLEDGED with balance 200), and another shows a duplicate ignores the amount in the retry. Another test shows the retry indicator has no effect on the outcome, and another shows that a stale key is reported even when the amount also exceeds the balance.
 
 ### T007: Atomic debit execution
 - **Depends on**: T006
-- **Files**: `bank/server/DebitService.java` (second part), `DebitServiceTest.java`
-- **Work**: For a key greater than the last key with enough funds, execute the guarded update and commit, returning SUCCESS with the new balance. If the update changes anything other than one row, roll back and raise a storage error.
+- **Files**: `src/main/java/bank/server/DebitService.java` (second part), `tests/bank/server/DebitServiceExecutionTest.java`
+- **Work**: For a key greater than the last key with enough funds, run the guarded update from `AccountStore.applyDebit` inside the same transaction, check that exactly one row changed, read back the new balance, and return SUCCESS with it. If the update changes any other number of rows, the transaction is rolled back and the request fails with `StorageException`.
 - **Requirements**: FR-010, FR-011, FR-021
-- **Done when**: Tests show SUCCESS reduces the balance and sets the key together, a key that skips values (for example 1 then 4) is accepted, a failure injected between the two changes cannot leave only one of them (verified by forcing the update to fail and checking both values are unchanged), and a rejected insufficient-funds request does not consume the key so a later smaller debit with the same key succeeds.
+- **Done when**: Tests show SUCCESS reduces the balance and sets the key together, a repeat of the same request is then a duplicate and ten repeats cause one debit, a key that skips values (for example 1 then 4) is accepted and an older key is then stale, a debit of exactly the whole balance succeeds, insufficient funds does not consume the key so a later smaller debit with the same key succeeds, a failure injected into the update (a database trigger that aborts it) leaves balance and key both unchanged and the next request still works, and an update that changes zero rows (a trigger that ignores it) fails with `StorageException` and leaves the state unchanged.
 
 ### T008: Concurrency on the service
 - **Depends on**: T007
@@ -79,10 +79,10 @@
 
 ### T009: Fault injector
 - **Depends on**: T003
-- **Files**: `bank/fault/FaultPoint.java`, `FaultAction.java`, `FaultRule.java`, `FaultConfig.java`, `FaultInjector.java`, `tests/bank/fault/FaultInjectorTest.java`
-- **Work**: Implement plan section 9: three fault points, DROP and DELAY actions, rules that match by point, optional account and key, and either "first N occurrences" or a probability. The probability decision is a pure function of seed, point, account, key, and occurrence number. Occurrence counters use a `ConcurrentHashMap` of `AtomicInteger`. A disabled injector is the default and does nothing.
+- **Files**: `src/main/java/bank/fault/FaultPoint.java`, `FaultAction.java`, `FaultRule.java`, `FaultConfig.java`, `FaultInjector.java`, `tests/bank/fault/FaultInjectorTest.java`
+- **Work**: Implement plan section 9: three fault points; DROP and DELAY actions; rules that match by point, optional account and optional key, and fire either on "the first N occurrences" or with a probability. An occurrence is one consultation of the injector for the same fault point, account, and key (one request identity), counted from 1. Rules are checked in order and the first that matches and fires decides. The probability decision is a pure function of seed, point, account, key, occurrence number, and rule position. Occurrence counters use a `ConcurrentHashMap` of `AtomicInteger`. A disabled injector is the default and does nothing. The injector only decides: the caller performs the drop or the delay.
 - **Requirements**: FR-020, FR-024
-- **Done when**: Tests show that the same configuration gives identical decisions across two runs, including when decisions are requested from many threads at once, that "first N occurrences" applies exactly N times, that different seeds give different decisions over a large sample, and that the disabled injector never produces a fault and never creates counters.
+- **Done when**: Tests show that the same configuration gives identical decisions across two runs, including when decisions are requested from many threads at once, that concurrent consultations of one request identity are counted exactly, that "first N occurrences" applies exactly N times to each request identity, that rules apply only at their own point, account, and key, that the first matching rule wins, that different seeds give different decisions over a large sample at roughly the configured probability, that invalid rules are refused, and that the disabled injector never produces a fault and never creates counters.
 
 ## Phase 5: HTTP server
 
