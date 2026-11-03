@@ -24,10 +24,10 @@
 
 ### T002: SQLite connection support
 - **Depends on**: T001, T003 (T003 creates `StorageException`, so it is done first)
-- **Files**: `src/main/java/bank/common/Sqlite.java`, `tests/bank/common/SqliteTest.java`
-- **Work**: A class that opens connections to a database file with WAL journal mode, full synchronous mode, a busy timeout, and immediate transaction mode, and throws `StorageException` on failure. It holds only the database URL.
-- **Requirements**: FR-019 (durability settings), FR-015 (immediate transactions)
-- **Done when**: Tests show that a value written and committed in one connection is read from a second connection, that a rolled-back write is not visible, and that a connection reports the configured journal and synchronous modes.
+- **Files**: `src/main/java/bank/common/Sqlite.java`, `src/main/java/bank/common/TransactionWork.java`, `tests/bank/common/SqliteTest.java`
+- **Work**: A class that opens connections to a database file with WAL journal mode, full synchronous mode, and a busy timeout, and runs a piece of work inside a transaction that starts with an explicit `BEGIN IMMEDIATE`, commits on success, and rolls back on any failure, rethrowing the original error. Database failures become `StorageException`. Transactions use explicit SQL statements, not the driver's transaction-mode setting, so the locking behavior does not depend on driver internals. The class holds only the database URL and the timeout.
+- **Requirements**: FR-010 (rollback leaves no partial change), FR-015 (immediate transactions), FR-019 (durability settings)
+- **Done when**: Tests show that a value committed through one connection is read through another, that a rolled-back write is not visible and the original error reaches the caller unchanged, that a later transaction can start straight after a rollback, that connections report WAL journal mode, full synchronous mode, and the configured busy timeout, that data survives opening the database again through a new `Sqlite` object, that a transaction started while another connection holds the write lock waits for the busy timeout and then fails with `StorageException`, that a failing SQL statement becomes `StorageException`, and that an unusable database path becomes `StorageException`.
 
 ## Phase 2: Shared types
 

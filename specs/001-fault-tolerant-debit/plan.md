@@ -63,7 +63,8 @@ Packages live under `src/main/java/bank/`. Tests mirror them under `tests/bank/`
 | | `DebitRequest` | Immutable record: account id, amount, key, retry indicator. Method `requireValid()` is the single place that checks the account identifier characters, a positive amount, and a positive key |
 | | `DebitResponse` | Immutable record: outcome, account id, key, balance (optional), reason (optional) |
 | | `WireFormat` | Encodes and decodes requests and responses. Decoding failures raise `InvalidRequestException` (server side) or are treated as ERROR (client side) |
-| | `Sqlite` | Opens connections with the project's settings (WAL journal, full synchronous, busy timeout, immediate transactions). Holds only the database URL |
+| | `Sqlite` | Opens connections with the project's settings (WAL journal, full synchronous, busy timeout) and runs work in a transaction that starts with an explicit `BEGIN IMMEDIATE`, commits on success and rolls back on any failure. Holds only the database URL and the timeout |
+| | `TransactionWork` | Functional interface for the body of a transaction. It may throw any `BankException`, which rolls the transaction back and propagates unchanged |
 | | `BankException` and subclasses | See section 7 |
 | `bank.server` | `BankingServer` | Starts and stops the HTTP server with a fixed thread pool. Creates the schema if missing |
 | | `DebitHandler` | HTTP handler for `POST /debit`. Decodes, asks the fault injector, calls the service, encodes. Maps exceptions to outcomes |
