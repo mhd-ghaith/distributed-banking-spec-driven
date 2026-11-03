@@ -2,7 +2,7 @@ version: "3"
 
 agents:
   root:
-    model: google/gemini-3.5-flash
+    model: google/gemini-3.8-flash
     skills: true
     description: Professional full-stack software engineer and code reviewer.
     instruction: |
