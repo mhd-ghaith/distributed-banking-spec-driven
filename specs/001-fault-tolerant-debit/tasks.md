@@ -49,10 +49,10 @@
 
 ### T005: Server schema and account store
 - **Depends on**: T002, T003
-- **Files**: `bank/server/AccountStore.java`, `tests/bank/server/AccountStoreTest.java`
-- **Work**: Create the `accounts` table if missing (plan section 6.1). Provide: create an account with a balance (for test setup), read an account's balance and last key, and a guarded update that subtracts an amount and sets the key only if `last_key < key` and `balance >= amount`, reporting how many rows changed.
-- **Requirements**: FR-001, FR-002
-- **Done when**: Tests show that a new account has last key 0, that the table rejects a negative balance, that the guarded update changes one row when allowed and zero rows when the key is not greater or the funds are too low, and that nothing changes in the zero-row case.
+- **Files**: `src/main/java/bank/server/AccountStore.java`, `tests/bank/server/AccountStoreTest.java`
+- **Work**: `AccountStore` is created from a `Sqlite` object and creates the `accounts` table if missing (plan section 6.1), without touching existing data. It offers two kinds of methods. Methods that take an open `Connection` are used inside a transaction by the debit service: `find` (read an account's balance and last key) and `applyDebit` (a guarded update that subtracts the amount and sets the key only if `last_key < key` and `balance >= amount`, returning how many rows changed, and refusing an amount or key of zero or less with `IllegalArgumentException`, because a negative amount would add money). Methods that run their own transaction are for test setup and inspection: `createAccount` (balance given, last key 0) and `read`. The account record `AccountStore.Account` holds identifier, balance, and last key.
+- **Requirements**: FR-001, FR-002, FR-010
+- **Done when**: Tests show that a new account has last key 0, that an unknown account is absent, that creating an existing account or an account with a negative balance fails with `StorageException` and changes nothing, that the table itself rejects a negative balance or negative last key, that the guarded update changes exactly one row and both columns together when the key is greater and the funds suffice (including debiting the whole balance, and a key that skips values), that it changes zero rows and nothing else when the key is equal or lower, the funds are short, or the account is unknown, that other accounts are untouched, that an update rolled back with its transaction leaves both columns unchanged, and that reopening the same file keeps the table and its data.
 
 ### T006: Debit decisions that never change state
 - **Depends on**: T005
