@@ -40,10 +40,10 @@
 
 ### T004: Wire format
 - **Depends on**: T003
-- **Files**: `bank/common/WireFormat.java`, `tests/bank/common/WireFormatTest.java`
-- **Work**: Encode and decode requests and responses as lines of `name=value` (plan decision D-4). Decoding a request parses every field and then calls `DebitRequest.requireValid()`.
-- **Requirements**: FR-001, FR-009, FR-017
-- **Done when**: Tests cover round trips for requests and responses, and `InvalidRequestException` for: a missing field, a repeated field, a non-numeric number, an amount of zero or less, a key of zero or less, an account id with characters outside letters, digits, `_` and `-`, and an empty body.
+- **Files**: `src/main/java/bank/common/WireFormat.java`, `tests/bank/common/WireFormatTest.java`
+- **Work**: Encode and decode requests and responses as lines of `name=value` (plan decision D-4). Requests carry exactly the fields `account`, `amount`, `key`, `retry`. Responses carry `outcome`, `account`, `key`, and optionally `balance` and `reason`. Decoding is strict: unknown, repeated, or missing fields, lines without `=`, and numbers that are not whole decimal numbers of at most 18 digits are rejected. Field order, blank lines, and `\r\n` line endings are tolerated. Decoding a request parses every field and then calls `DebitRequest.requireValid()`, and any problem raises `InvalidRequestException`. Decoding a response never throws: an unreadable response becomes an ERROR outcome with an empty account identifier and key 0, because the client then simply retries the same key. Line breaks in a response's reason or account text are replaced by spaces when encoding.
+- **Requirements**: FR-001, FR-009, FR-017, FR-022, FR-023
+- **Done when**: Tests cover round trips for requests (retry true and false) and for responses (every outcome, with and without balance and reason, and with an empty account identifier and key 0 as sent for an undecodable request), the exact encoded text of one request and one response, tolerance of field order, blank lines and `\r\n`, and `InvalidRequestException` for: a null or empty body, each missing field, a repeated field, an unknown field, a line without `=`, an empty field name, a number that is non-numeric, signed with `+`, space-padded, decimal, empty, or 19 digits long, an amount or key of zero or less, a bad account identifier, and a retry value other than `true` or `false`. Unreadable responses (null, empty, missing fields, unknown outcome, negative key or balance, repeated or unknown fields) decode to an ERROR outcome that is not definitive.
 
 ## Phase 3: Server logic
 
@@ -119,9 +119,9 @@
 ### T014: Client submit loop
 - **Depends on**: T012, T013
 - **Files**: `bank/client/OrderServiceClient.java`, `TransactionResult.java`, `tests/bank/client/OrderServiceClientTest.java`
-- **Work**: Implement `submit` as in plan section 10.2, using a scripted fake transport in tests so every sequence of responses is exact. The first attempt has the retry indicator false and later ones true. A response whose account or key does not match is ignored as if nothing arrived.
+- **Work**: Implement `submit` as in plan section 10.2, using a scripted fake transport in tests so every sequence of responses is exact. The first attempt has the retry indicator false and later ones true. A response whose account or key does not match is ignored as if nothing arrived.  Before issuing any key, `submit` checks the account identifier and amount with the rules of `DebitRequest.requireValid()` and throws `InvalidRequestException` if they fail, so an invalid request consumes no key.
 - **Requirements**: FR-005, FR-006, FR-007, FR-008, FR-009, FR-018, FR-022, FR-023
-- **Done when**: Tests show: success on the first attempt, ERROR then success using the same key, a timeout then DUPLICATE_ACKNOWLEDGED reported as COMPLETED, INSUFFICIENT_FUNDS and INVALID_REQUEST and STALE_KEY reported as REJECTED with the reason, exhausted attempts reported as OUTCOME_UNKNOWN with the key and never as failed, a new `submit` for that account refused with `PendingTransactionException` and no new key issued, the retry indicator sequence false then true, and a mismatched response ignored.
+- **Done when**: Tests show: success on the first attempt, ERROR then success using the same key, a timeout then DUPLICATE_ACKNOWLEDGED reported as COMPLETED, INSUFFICIENT_FUNDS and INVALID_REQUEST and STALE_KEY reported as REJECTED with the reason, exhausted attempts reported as OUTCOME_UNKNOWN with the key and never as failed, a new `submit` for that account refused with `PendingTransactionException` and no new key issued, the retry indicator sequence false then true, a mismatched response ignored, and an invalid account identifier or amount refused before any key is issued.
 
 ### T015: Resume after outcome unknown and after restart
 - **Depends on**: T014

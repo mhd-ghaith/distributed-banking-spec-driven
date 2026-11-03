@@ -100,7 +100,7 @@ No other server table is needed. The spec assumes the server's only durable memo
 
 ### 6.2 Request handling sequence
 
-1. `DebitHandler` reads the body and decodes it. A missing field, a non-numeric number, an account id outside the allowed characters, a non-positive key, or a non-positive amount produces INVALID_REQUEST before touching the database (FR-017).
+1. `DebitHandler` reads the body and decodes it. A missing field, a non-numeric number, an account id outside the allowed characters, a non-positive key, or a non-positive amount produces INVALID_REQUEST before touching the database (FR-017). The response to a request that cannot be decoded has an empty account identifier and key 0, because there is nothing to echo.
 2. The handler asks the fault injector about `SERVER_BEFORE_EXECUTION`. A DROP aborts the exchange with no response and no database access. A DELAY sleeps (outside any transaction).
 3. `DebitService` opens a connection and begins an immediate transaction.
 4. It reads the account row. If there is none, it rolls back and the outcome is INVALID_REQUEST (unknown account).
@@ -200,7 +200,7 @@ A pending transaction exists exactly when `pending_amount` is not null, and its 
 
 ### 10.2 `submit(account, amount)`
 
-1. In one immediate transaction: if the account has a pending transaction, raise `PendingTransactionException` and issue nothing. Otherwise set `last_key` to `last_key + 1` (starting from 1) and set `pending_amount`. Commit (D-5, FR-003, FR-005).
+1. Check the account identifier and amount with the rules of `DebitRequest.requireValid()`, and raise `InvalidRequestException` without issuing a key if they fail. Then, in one immediate transaction: if the account has a pending transaction, raise `PendingTransactionException` and issue nothing. Otherwise set `last_key` to `last_key + 1` (starting from 1) and set `pending_amount`. Commit (D-5, FR-003, FR-005).
 2. Make attempt 1 with the retry indicator false, and every later attempt with it true (FR-009).
 3. Each attempt calls the transport with the per-attempt timeout. A response must echo the same account and key, otherwise it is ignored as if it never arrived (FR-023).
 4. A definitive outcome ends the loop: clear `pending_amount`, and return COMPLETED (SUCCESS or DUPLICATE_ACKNOWLEDGED) or REJECTED with the reason (INSUFFICIENT_FUNDS, INVALID_REQUEST, STALE_KEY) (FR-022).
